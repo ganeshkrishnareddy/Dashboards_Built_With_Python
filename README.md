@@ -4,6 +4,8 @@ I built this project as part of a placement-drive task where I had to select mul
 
 Project name used for submission: **Dashboard Bulit with Python**
 
+Repository: https://github.com/ganeshkrishnareddy/Dashboards_Built_With_Python
+
 ## What is in this repository
 
 This repo contains 4 deployable folders:
