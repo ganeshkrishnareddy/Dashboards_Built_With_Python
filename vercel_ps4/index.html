@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRAFFIQ — Predictive Traffic Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root {
+    --bg: #0f0f14;
+    --bg2: #161620;
+    --bg3: #1d1d2a;
+    --border: #252535;
+    --text: #e8e8f0;
+    --text2: #8888a8;
+    --text3: #555570;
+    --free: #22d3a5;
+    --slow: #f59e0b;
+    --jam: #ef4444;
+    --crit: #ff2060;
+    --pred: #818cf8;
+    --accent: #6366f1;
+    --mono: 'IBM Plex Mono', monospace;
+    --body: 'Outfit', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  #header {
+    height: 56px; background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 20px; flex-shrink: 0;
+  }
+  .logo { font-family: var(--body); font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .logo-sub { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: 2px; }
+  .header-mids { display: flex; gap: 8px; }
+  .level-chip {
+    padding: 4px 12px; border-radius: 100px; font-family: var(--mono); font-size: 10px;
+    border: 1px solid; cursor: pointer; transition: all 0.2s;
+  }
+  .chip-free { color: var(--free); border-color: rgba(34,211,165,0.3); }
+  .chip-slow { color: var(--slow); border-color: rgba(245,158,11,0.3); }
+  .chip-jam { color: var(--jam); border-color: rgba(239,68,68,0.3); }
+  .chip-crit { color: var(--crit); border-color: rgba(255,32,96,0.3); animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .header-right { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+  .predict-toggle {
+    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--text2);
+  }
+  .tog { width: 38px; height: 20px; border-radius: 10px; background: var(--border); position: relative; cursor: pointer; transition: background 0.2s; }
+  .tog.on { background: var(--accent); }
+  .tog::after { content:''; position:absolute; width:16px; height:16px; border-radius:50%; background:#fff; top:2px; left:2px; transition:left 0.2s; }
+  .tog.on::after { left: 20px; }
+  #forecast-slider-wrap { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--text2); }
+  #forecast-slider { width: 80px; accent-color: var(--accent); }
+  #forecast-val { color: var(--pred); min-width: 30px; }
+  #refresh-btn {
+    padding: 6px 16px; background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    font-family: var(--body); font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s;
+  }
+  #refresh-btn:hover { background: #4f46e5; }
+
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Left panel */
+  #left { width: 240px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .p-head { padding: 10px 14px; font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 2px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--crit); animation: blink 0.8s infinite; }
+
+  /* CCTV feeds */
+  #cctv-list { overflow-y: auto; flex: 1; }
+  #cctv-list::-webkit-scrollbar { width: 3px; }
+  #cctv-list::-webkit-scrollbar-thumb { background: var(--border); }
+  .cctv-card {
+    padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;
+  }
+  .cctv-card:hover, .cctv-card.active { background: rgba(99,102,241,0.05); }
+  .cctv-card.active { border-left: 2px solid var(--accent); }
+  .cctv-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .cctv-name { font-size: 12px; font-weight: 600; }
+  .cctv-level { width: 8px; height: 8px; border-radius: 50%; }
+  .lv-free { background: var(--free); }
+  .lv-slow { background: var(--slow); box-shadow: 0 0 6px var(--slow); }
+  .lv-jam { background: var(--jam); box-shadow: 0 0 6px var(--jam); animation: blink 1s infinite; }
+  .lv-crit { background: var(--crit); box-shadow: 0 0 8px var(--crit); animation: blink 0.6s infinite; }
+  .cctv-meta { font-family: var(--mono); font-size: 9px; color: var(--text3); }
+  .mini-bar { height: 3px; background: var(--border); border-radius: 1px; margin-top: 5px; overflow: hidden; }
+  .mini-fill { height: 100%; border-radius: 1px; transition: width 0.5s; }
+
+  /* CCTV viewer */
+  #cctv-viewer { height: 140px; background: var(--bg3); border-top: 1px solid var(--border); position: relative; overflow: hidden; }
+  #cctv-screen { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+  .cctv-sim { width: 100%; height: 100%; background: #0a0a10; position: relative; overflow: hidden; }
+  .cctv-label { position: absolute; top: 6px; left: 8px; font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,0.5); }
+  .cctv-timestamp { position: absolute; top: 6px; right: 8px; font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,0.4); }
+  .car { position: absolute; width: 16px; height: 8px; border-radius: 2px; transition: left 0.5s linear; }
+
+  /* Map */
+  #map-wrap { flex: 1; position: relative; }
+  #map { width: 100%; height: 100%; }
+
+  /* Prediction overlay */
+  #pred-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 500;
+    background: rgba(15,15,20,0.9); backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border); padding: 10px 16px;
+    display: flex; gap: 20px; align-items: center;
+  }
+  .pred-item { display: flex; align-items: center; gap: 10px; }
+  .pred-label { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: 1px; }
+  .pred-val { font-size: 14px; font-weight: 700; }
+
+  /* Right panel */
+  #right { width: 280px; flex-shrink: 0; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+  .stat-cell { background: var(--bg2); padding: 12px 14px; }
+  .stat-label { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: 1px; margin-bottom: 4px; }
+  .stat-num { font-size: 20px; font-weight: 700; }
+  .chart-section { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .chart-label { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: 1px; margin-bottom: 6px; }
+  canvas { flex: 1; max-height: 120px; }
+
+  /* Alert panel */
+  #alert-feed { padding: 10px; border-top: 1px solid var(--border); overflow-y: auto; max-height: 160px; }
+  #alert-feed::-webkit-scrollbar { width: 3px; }
+  #alert-feed::-webkit-scrollbar-thumb { background: var(--border); }
+  .alert-item { display: flex; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .alert-item:last-child { border: none; }
+  .alert-icon { font-size: 12px; flex-shrink: 0; margin-top: 1px; }
+  .alert-text { font-size: 11px; color: var(--text2); line-height: 1.4; }
+  .alert-time { font-family: var(--mono); font-size: 9px; color: var(--text3); }
+  .alert-badge { font-family: var(--mono); font-size: 8px; padding: 1px 5px; border-radius: 2px; }
+  .ab-crit { background: rgba(255,32,96,0.15); color: var(--crit); }
+  .ab-warn { background: rgba(245,158,11,0.15); color: var(--slow); }
+  .ab-pred { background: rgba(129,140,248,0.15); color: var(--pred); }
+
+  /* Leaflet */
+  .leaflet-popup-content-wrapper { background: var(--bg3) !important; border: 1px solid var(--border) !important; color: var(--text) !important; border-radius: 6px !important; box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; }
+  .leaflet-popup-tip { background: var(--bg3) !important; }
+  .leaflet-popup-close-button { color: var(--text3) !important; }
+  .leaflet-control-zoom a { background: var(--bg3) !important; color: var(--text) !important; border-color: var(--border) !important; }
+  .leaflet-control-attribution { background: rgba(15,15,20,0.8) !important; color: var(--text3) !important; font-size: 9px !important; }
+  .t-popup { font-family: var(--body); font-size: 12px; min-width: 200px; }
+  .t-popup .t-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .t-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .t-row:last-child { border: none; }
+  .t-key { color: var(--text3); font-size: 11px; }
+  .t-val { font-weight: 600; font-size: 11px; }
+  .pred-zone-ring { animation: ringPulse 2s infinite; }
+  @keyframes ringPulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div>
+    <div class="logo">TRAFF<span>IQ</span></div>
+    <div class="logo-sub">HYBRID PREDICTIVE TRAFFIC INTELLIGENCE</div>
+  </div>
+  <div style="width:1px;height:30px;background:var(--border)"></div>
+  <div class="header-mids">
+    <span class="level-chip chip-free">● FREE FLOW</span>
+    <span class="level-chip chip-slow">● SLOW</span>
+    <span class="level-chip chip-jam">● CONGESTED</span>
+    <span class="level-chip chip-crit">⚡ STANDSTILL</span>
+  </div>
+  <div class="header-right">
+    <div class="predict-toggle">
+      PREDICTION LAYER <div class="tog on" id="pred-tog" onclick="togglePrediction()"></div>
+    </div>
+    <div id="forecast-slider-wrap">
+      FORECAST: <input type="range" id="forecast-slider" min="15" max="45" step="15" value="30" oninput="updateForecast(this.value)">
+      <span id="forecast-val">30m</span>
+    </div>
+    <button id="refresh-btn" onclick="refreshData()">↺ REFRESH</button>
+  </div>
+</div>
+
+<div id="main">
+  <!-- Left -->
+  <div id="left">
+    <div class="p-head">CCTV NETWORK <div class="live-dot"></div></div>
+    <div id="cctv-list"></div>
+    <div id="cctv-viewer">
+      <div id="cctv-screen">
+        <div class="cctv-sim" id="cctv-sim">
+          <div class="cctv-label" id="cctv-loc-label">CAM-001 | CONNAUGHT PLACE</div>
+          <div class="cctv-timestamp" id="cctv-ts"></div>
+          <canvas id="cctv-canvas" width="240" height="140"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="pred-overlay">
+      <div class="pred-item">
+        <div><div class="pred-label">PREDICTED STANDSTILL (30m)</div><div class="pred-val" id="p-standstill" style="color:var(--crit)">3 zones</div></div>
+      </div>
+      <div style="width:1px;height:30px;background:var(--border)"></div>
+      <div class="pred-item">
+        <div><div class="pred-label">LSTM CONFIDENCE</div><div class="pred-val" id="p-conf" style="color:var(--pred)">84%</div></div>
+      </div>
+      <div style="width:1px;height:30px;background:var(--border)"></div>
+      <div class="pred-item">
+        <div><div class="pred-label">ACTIVE INCIDENTS</div><div class="pred-val" id="p-incidents" style="color:var(--slow)">2</div></div>
+      </div>
+      <div style="width:1px;height:30px;background:var(--border)"></div>
+      <div class="pred-item">
+        <div><div class="pred-label">GOOGLE MAPS BASELINE</div><div class="pred-val" id="p-gm" style="color:var(--free)">SYNCED</div></div>
+      </div>
+      <div style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text3)" id="overlay-time"></div>
+    </div>
+  </div>
+
+  <!-- Right -->
+  <div id="right">
+    <div class="stat-grid">
+      <div class="stat-cell"><div class="stat-label">TOTAL VEHICLES</div><div class="stat-num" id="s-vehicles" style="color:var(--text)">14,382</div></div>
+      <div class="stat-cell"><div class="stat-label">AVG SPEED (km/h)</div><div class="stat-num" id="s-speed" style="color:var(--slow)">23</div></div>
+      <div class="stat-cell"><div class="stat-label">DENSITY INDEX</div><div class="stat-num" id="s-density" style="color:var(--jam)">78</div></div>
+      <div class="stat-cell"><div class="stat-label">FLOW RATE/hr</div><div class="stat-num" id="s-flow" style="color:var(--free)">1,840</div></div>
+    </div>
+    <div class="chart-section">
+      <div>
+        <div class="chart-label">REAL-TIME VEHICLE DENSITY — KEY CORRIDORS</div>
+        <canvas id="densityChart"></canvas>
+      </div>
+      <div>
+        <div class="chart-label">LSTM PREDICTION — CONGESTION PROBABILITY NEXT 45MIN</div>
+        <canvas id="lstmChart"></canvas>
+      </div>
+    </div>
+    <div class="p-head" style="border-top:1px solid var(--border)">INCIDENT FEED <div class="live-dot" style="background:var(--slow)"></div></div>
+    <div id="alert-feed"></div>
+  </div>
+</div>
+
+<script>
+// ─── Data Model ───────────────────────────────────────────────────────────────
+const CCTV_NODES = [
+  { id:'C01', name:'Connaught Place', lat:28.6330, lng:77.2194, level:3, density:89, speed:12, cause:'Signal Delay + Volume', vehicles:320, predicted:5 },
+  { id:'C02', name:'ITO Crossing', lat:28.6282, lng:77.2453, level:4, density:96, speed:4,  cause:'Stalled HGV + Crowd', vehicles:410, predicted:5 },
+  { id:'C03', name:'Lajpat Nagar', lat:28.5680, lng:77.2438, level:2, density:62, speed:28, cause:'Rush Hour Buildup', vehicles:180, predicted:3 },
+  { id:'C04', name:'Karol Bagh', lat:28.6520, lng:77.1897, level:2, density:55, speed:32, cause:'Normal Flow', vehicles:140, predicted:2 },
+  { id:'C05', name:'Nehru Place', lat:28.5488, lng:77.2515, level:3, density:74, speed:18, cause:'Minor Fender Bender', vehicles:210, predicted:4 },
+  { id:'C06', name:'Rajouri Garden', lat:28.6444, lng:77.1204, level:1, density:28, speed:54, cause:'Free Flowing', vehicles:80, predicted:1 },
+  { id:'C07', name:'Rohini Sector 3', lat:28.7313, lng:77.1133, level:1, density:32, speed:48, cause:'Free Flowing', vehicles:90, predicted:2 },
+  { id:'C08', name:'Saket District', lat:28.5274, lng:77.2163, level:3, density:78, speed:16, cause:'Construction Zone', vehicles:240, predicted:4 },
+];
+
+const LEVEL_COLORS = ['','#22d3a5','#f59e0b','#ef4444','#ff2060'];
+const LEVEL_LABELS = ['','FREE FLOW','SLOW','CONGESTED','STANDSTILL'];
+let map, mapLayers=[], predLayers=[], predictionOn=true, forecastMins=30;
+let selectedCCTV = CCTV_NODES[1];
+let densityChart, lstmChart, cctvAnimFrame;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  initMap();
+  renderCCTVList();
+  initCharts();
+  renderAlerts();
+  startCCTVSim();
+  startOverlayClock();
+  setInterval(tickLiveData, 3000);
+});
+
+function startOverlayClock() {
+  function tick() {
+    const now = new Date();
+    document.getElementById('overlay-time').textContent =
+      'LIVE · ' + now.toTimeString().substring(0,8);
+    document.getElementById('cctv-ts').textContent = now.toTimeString().substring(0,8);
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ─── Map ─────────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map').setView([28.620, 77.200], 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+  }).addTo(map);
+  renderMapNodes();
+}
+
+function renderMapNodes() {
+  mapLayers.forEach(l => map.removeLayer(l));
+  predLayers.forEach(l => map.removeLayer(l));
+  mapLayers=[]; predLayers=[];
+
+  CCTV_NODES.forEach(node => {
+    const c = LEVEL_COLORS[node.level];
+    const size = 8 + node.density / 10;
+    // Main dot
+    const circle = L.circleMarker([node.lat, node.lng], {
+      radius: size, color: c, fillColor: c, fillOpacity: 0.85, weight: 2, opacity: 0.9
+    }).addTo(map);
+
+    // Pulse ring
+    const pulse = L.circleMarker([node.lat, node.lng], {
+      radius: size + 6, color: c, fillColor: 'transparent', weight: 1, opacity: 0.3
+    }).addTo(map);
+
+    // Prediction ring (if on)
+    if(predictionOn && node.predicted >= 3) {
+      const pColor = node.predicted >= 4 ? '#ff2060' : '#818cf8';
+      const pRing = L.circle([node.lat, node.lng], {
+        radius: 600 + node.predicted * 100, color: pColor, fillColor: pColor,
+        fillOpacity: 0.05, weight: 1, opacity: 0.4, dashArray: '5, 5'
+      }).addTo(map);
+      predLayers.push(pRing);
+    }
+
+    // Popup
+    const popHtml = `<div class="t-popup">
+      <div class="t-title" style="color:${c}">${node.name}</div>
+      <div class="t-row"><span class="t-key">Status</span><span class="t-val" style="color:${c}">${LEVEL_LABELS[node.level]}</span></div>
+      <div class="t-row"><span class="t-key">Vehicle Count</span><span class="t-val">${node.vehicles}</span></div>
+      <div class="t-row"><span class="t-key">Avg Speed</span><span class="t-val">${node.speed} km/h</span></div>
+      <div class="t-row"><span class="t-key">Density Index</span><span class="t-val">${node.density}%</span></div>
+      <div class="t-row"><span class="t-key">Cause (CV)</span><span class="t-val">${node.cause}</span></div>
+      <div class="t-row"><span class="t-key">Predicted (${forecastMins}m)</span><span class="t-val" style="color:#818cf8">${LEVEL_LABELS[node.predicted]} (LSTM)</span></div>
+    </div>`;
+    circle.bindPopup(popHtml);
+    circle.on('click', () => { selectCCTV(node); });
+
+    // Road line simulation
+    if(node.level >= 3) {
+      const lineOpts = { color: c, weight: 4, opacity: 0.5 };
+      const offset = 0.008;
+      const line = L.polyline([[node.lat - offset, node.lng - offset], [node.lat + offset, node.lng + offset]], lineOpts).addTo(map);
+      mapLayers.push(line);
+    }
+
+    mapLayers.push(circle, pulse);
+  });
+}
+
+// ─── CCTV List ────────────────────────────────────────────────────────────────
+function renderCCTVList() {
+  const list = document.getElementById('cctv-list');
+  list.innerHTML = '';
+  CCTV_NODES.forEach(node => {
+    const div = document.createElement('div');
+    div.className = 'cctv-card' + (node.id === selectedCCTV.id ? ' active' : '');
+    div.id = 'cctv-card-' + node.id;
+    const lvClass = ['','lv-free','lv-slow','lv-jam','lv-crit'][node.level];
+    const fillColor = LEVEL_COLORS[node.level];
+    div.innerHTML = `
+      <div class="cctv-top">
+        <span class="cctv-name">${node.name}</span>
+        <div class="cctv-level ${lvClass}"></div>
+      </div>
+      <div class="cctv-meta">${node.id} · ${node.vehicles} veh · ${node.speed}km/h</div>
+      <div class="mini-bar"><div class="mini-fill" style="width:${node.density}%;background:${fillColor}"></div></div>`;
+    div.onclick = () => selectCCTV(node);
+    list.appendChild(div);
+  });
+}
+
+function selectCCTV(node) {
+  selectedCCTV = node;
+  document.querySelectorAll('.cctv-card').forEach(c => c.classList.remove('active'));
+  const card = document.getElementById('cctv-card-' + node.id);
+  if(card) card.classList.add('active');
+  document.getElementById('cctv-loc-label').textContent = `${node.id} | ${node.name.toUpperCase()}`;
+  map.panTo([node.lat, node.lng]);
+  updateCCTVCanvas(node);
+}
+
+// ─── CCTV Simulation Canvas ───────────────────────────────────────────────────
+let carPositions = [];
+
+function startCCTVSim() {
+  carPositions = Array.from({length: 8}, (_,i) => ({
+    x: Math.random() * 220, y: 30 + i * 14,
+    speed: 0.5 + Math.random() * 1.5,
+    color: `hsl(${Math.random()*40+20},70%,50%)`,
+    w: 14 + Math.random() * 8
+  }));
+  animateCCTV();
+}
+
+function animateCCTV() {
+  const canvas = document.getElementById('cctv-canvas');
+  const ctx = canvas.getContext('2d');
+  const density = selectedCCTV.density / 100;
+
+  ctx.fillStyle = '#080810';
+  ctx.fillRect(0, 0, 240, 140);
+
+  // Road
+  ctx.fillStyle = '#1a1a28';
+  ctx.fillRect(0, 20, 240, 100);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.setLineDash([12,8]);
+  ctx.beginPath(); ctx.moveTo(0,70); ctx.lineTo(240,70); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const speedFactor = 1 - density * 0.85;
+
+  carPositions.forEach((car, i) => {
+    car.x += car.speed * speedFactor;
+    if(car.x > 250) car.x = -20;
+    ctx.fillStyle = car.color;
+    ctx.beginPath();
+    ctx.roundRect(car.x, car.y, car.w, 8, 2);
+    ctx.fill();
+    // headlights
+    ctx.fillStyle = 'rgba(255,255,200,0.8)';
+    ctx.fillRect(car.x + car.w - 2, car.y + 1, 2, 2);
+    ctx.fillRect(car.x + car.w - 2, car.y + 5, 2, 2);
+  });
+
+  // Density indicator
+  const indColor = LEVEL_COLORS[selectedCCTV.level];
+  ctx.fillStyle = indColor;
+  ctx.fillRect(0, 0, 240 * density, 2);
+
+  // YOLO boxes sim
+  if(selectedCCTV.level >= 3) {
+    ctx.strokeStyle = 'rgba(99,102,241,0.7)'; ctx.lineWidth = 1;
+    carPositions.slice(0,3).forEach(car => {
+      ctx.strokeRect(car.x - 2, car.y - 2, car.w + 4, 12);
+      ctx.fillStyle = 'rgba(99,102,241,0.8)'; ctx.font = '7px IBM Plex Mono';
+      ctx.fillText('VEH', car.x, car.y - 3);
+    });
+  }
+
+  cctvAnimFrame = requestAnimationFrame(animateCCTV);
+}
+
+function updateCCTVCanvas(node) { /* re-uses the running animation */ }
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+function initCharts() {
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 8, family: 'IBM Plex Mono' }, color: '#555570' } },
+      y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { font: { size: 8, family: 'IBM Plex Mono' }, color: '#555570' } }
+    }
+  };
+
+  densityChart = new Chart(document.getElementById('densityChart'), {
+    type: 'bar',
+    options: { ...baseOpts },
+    data: {
+      labels: CCTV_NODES.map(n => n.name.split(' ')[0]),
+      datasets: [{
+        data: CCTV_NODES.map(n => n.density),
+        backgroundColor: CCTV_NODES.map(n => LEVEL_COLORS[n.level] + '99'),
+        borderColor: CCTV_NODES.map(n => LEVEL_COLORS[n.level]),
+        borderWidth: 1, borderRadius: 3
+      }]
+    }
+  });
+
+  const lstmLabels = ['NOW', '+5m', '+10m', '+15m', '+20m', '+25m', '+30m', '+35m', '+40m', '+45m'];
+  lstmChart = new Chart(document.getElementById('lstmChart'), {
+    type: 'line',
+    options: { ...baseOpts },
+    data: {
+      labels: lstmLabels,
+      datasets: [
+        { label: 'ITO (Crit)', data: [96,97,98,97,95,92,88,84,80,75], borderColor: '#ff2060', borderWidth: 1.5, pointRadius: 2, fill: false, tension: 0.4 },
+        { label: 'CP (High)', data: [89,91,93,94,94,92,89,85,81,78], borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 2, fill: false, tension: 0.4 },
+        { label: 'Saket (Med)', data: [78,80,82,84,86,85,83,80,77,73], borderColor: '#818cf8', borderWidth: 1.5, pointRadius: 2, fill: false, tension: 0.4 },
+      ]
+    }
+  });
+}
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+const ALERTS = [
+  { icon: '⚡', badge: 'ab-crit', badgeLabel: 'CRITICAL', text: 'ITO Crossing: Stalled HGV detected by YOLO-v8. Lane 3 blocked. Standstill propagating northward.', time: '2 min ago' },
+  { icon: '⚠', badge: 'ab-warn', badgeLabel: 'WARNING', text: 'Connaught Place: Vehicle density 89% — approaching Level-4 threshold. Google Maps lag: +4 min.', time: '5 min ago' },
+  { icon: '◈', badge: 'ab-pred', badgeLabel: 'LSTM PRED', text: 'Nehru Place–Saket corridor: 78% probability of Level-4 standstill jam in next 28 minutes.', time: '6 min ago' },
+  { icon: '⚠', badge: 'ab-warn', badgeLabel: 'WARNING', text: 'Cross-modal mismatch: Google Maps shows "moderate" on Ring Rd — CCTV count suggests severe. False-positive filtered.', time: '9 min ago' },
+  { icon: '◈', badge: 'ab-pred', badgeLabel: 'LSTM PRED', text: 'Morning peak inflow analysis: ITO bottleneck will cascade to Vikas Marg in 35 min. Alternate route advisory ready.', time: '11 min ago' },
+];
+
+function renderAlerts() {
+  const feed = document.getElementById('alert-feed');
+  feed.innerHTML = '';
+  ALERTS.forEach(a => {
+    const div = document.createElement('div');
+    div.className = 'alert-item';
+    div.innerHTML = `
+      <div class="alert-icon">${a.icon}</div>
+      <div>
+        <span class="alert-badge ${a.badge}">${a.badgeLabel}</span>
+        <div class="alert-text">${a.text}</div>
+        <div class="alert-time">${a.time}</div>
+      </div>`;
+    feed.appendChild(div);
+  });
+}
+
+// ─── Live tick ────────────────────────────────────────────────────────────────
+function tickLiveData() {
+  CCTV_NODES.forEach(n => {
+    n.density = Math.max(10, Math.min(99, n.density + (Math.random()-0.48)*4));
+    n.speed = Math.max(2, Math.min(70, n.speed + (Math.random()-0.5)*3));
+    n.vehicles = Math.max(40, Math.round(n.vehicles + (Math.random()-0.5)*15));
+  });
+  const totalV = CCTV_NODES.reduce((s,n)=>s+n.vehicles,0);
+  const avgSpd = Math.round(CCTV_NODES.reduce((s,n)=>s+n.speed,0)/CCTV_NODES.length);
+  const avgDen = Math.round(CCTV_NODES.reduce((s,n)=>s+n.density,0)/CCTV_NODES.length);
+  document.getElementById('s-vehicles').textContent = totalV.toLocaleString();
+  document.getElementById('s-speed').textContent = avgSpd;
+  document.getElementById('s-density').textContent = avgDen;
+  densityChart.data.datasets[0].data = CCTV_NODES.map(n=>Math.round(n.density));
+  densityChart.update('none');
+  renderCCTVList();
+}
+
+// ─── Controls ─────────────────────────────────────────────────────────────────
+function togglePrediction() {
+  predictionOn = !predictionOn;
+  document.getElementById('pred-tog').classList.toggle('on', predictionOn);
+  renderMapNodes();
+}
+
+function updateForecast(val) {
+  forecastMins = parseInt(val);
+  document.getElementById('forecast-val').textContent = val + 'm';
+  const standstill = forecastMins >= 30 ? 3 : forecastMins >= 15 ? 2 : 1;
+  const conf = forecastMins === 15 ? 91 : forecastMins === 30 ? 84 : 72;
+  document.getElementById('p-standstill').textContent = standstill + ' zones';
+  document.getElementById('p-conf').textContent = conf + '%';
+}
+
+function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = '↺ SYNCING...'; btn.disabled = true;
+  tickLiveData(); renderMapNodes();
+  setTimeout(() => { btn.textContent = '↺ REFRESH'; btn.disabled = false; }, 1000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Placement Drive Task - Pages</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #0b1f33;
+      --soft: #5f708b;
+      --bg: #edf4ff;
+      --card: #ffffff;
+      --line: #d3def0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Sora, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(700px 300px at 12% 15%, rgba(14,165,233,.15), transparent),
+        radial-gradient(700px 360px at 88% 75%, rgba(34,197,94,.14), transparent),
+        var(--bg);
+      min-height: 100vh;
+      padding: 22px;
+    }
+    .top {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .meta { font-size: .9rem; color: var(--soft); }
+    .meta strong { color: var(--ink); }
+    .logout {
+      display: inline-block;
+      text-decoration: none;
+      color: #fff;
+      background: #dc2626;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-weight: 700;
+      font-size: .85rem;
+    }
+    h1 { margin: 20px 4px 8px; font-size: 1.4rem; }
+    p { margin: 0 4px 20px; color: var(--soft); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(12, 27, 51, 0.08);
+    }
+    .tag {
+      display: inline-block;
+      font-family: "Space Mono", monospace;
+      font-size: .72rem;
+      background: #e5f3ff;
+      border: 1px solid #b7ddfa;
+      color: #075985;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+    .card h2 { margin: 2px 0 8px; font-size: 1.05rem; }
+    .card p { margin: 0 0 14px; font-size: .92rem; }
+    .go {
+      text-decoration: none;
+      display: inline-block;
+      background: #0ea5e9;
+      color: #fff;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: .85rem;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="meta">
+      Logged in as <strong>{{ user_name }}</strong> ({{ user_role }})<br/>
+      {{ user_email }}
+    </div>
+    <a class="logout" href="/logout">Logout</a>
+  </div>
+
+  <h1>Placement Drive Submission Portal</h1>
+  <p>All required pages are available below with secured login and backend API routes.</p>
+
+  <div class="grid">
+    <div class="card">
+      <span class="tag">PS1</span>
+      <h2>Multi-Source Intelligence Fusion Dashboard</h2>
+      <p>OSINT + HUMINT + IMINT visualization and analysis view.</p>
+      <a class="go" href="/ps1">Open PS1 Page</a>
+    </div>
+
+    <div class="card">
+      <span class="tag">PS3</span>
+      <h2>Predictive Urban Growth Analytics</h2>
+      <p>Growth velocity scoring, market dynamics and zone-level projection interface.</p>
+      <a class="go" href="/ps3">Open PS3 Page</a>
+    </div>
+
+    <div class="card">
+      <span class="tag">PS4</span>
+      <h2>Predictive Traffic Intelligence</h2>
+      <p>CCTV + geospatial congestion prediction and hotspot monitoring dashboard.</p>
+      <a class="go" href="/ps4">Open PS4 Page</a>
+    </div>
+  </div>
+</body>
+</html>

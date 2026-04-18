@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Placement Drive Demo - Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #eef4ff;
+      --card: #ffffff;
+      --ink: #0c1b33;
+      --muted: #5f6f88;
+      --accent: #0ea5e9;
+      --accent-2: #16a34a;
+      --danger: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Sora, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(600px 320px at 15% 20%, rgba(14,165,233,0.18), transparent),
+        radial-gradient(650px 320px at 85% 75%, rgba(22,163,74,0.16), transparent),
+        var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: min(460px, 100%);
+      background: var(--card);
+      border-radius: 20px;
+      box-shadow: 0 25px 70px rgba(12, 27, 51, 0.16);
+      overflow: hidden;
+      border: 1px solid rgba(12, 27, 51, 0.08);
+    }
+    .head {
+      background: linear-gradient(110deg, #0284c7, #0369a1 45%, #15803d);
+      color: #fff;
+      padding: 20px 24px;
+    }
+    .head h1 { margin: 0; font-size: 1.1rem; }
+    .head p { margin: 8px 0 0; opacity: 0.9; font-size: 0.9rem; }
+    form { padding: 24px; }
+    label { display: block; font-size: 0.85rem; margin: 12px 0 6px; color: var(--muted); }
+    input {
+      width: 100%;
+      border: 1px solid #c7d5ea;
+      border-radius: 12px;
+      padding: 12px;
+      font: inherit;
+      outline: none;
+      transition: 0.2s border-color;
+    }
+    input:focus { border-color: var(--accent); }
+    button {
+      margin-top: 18px;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px;
+      font: inherit;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      cursor: pointer;
+    }
+    .demo {
+      margin-top: 16px;
+      font-family: "Space Mono", monospace;
+      font-size: 0.8rem;
+      background: #f5f9ff;
+      border: 1px dashed #b8c9e6;
+      border-radius: 12px;
+      padding: 10px 12px;
+      color: #27456f;
+      line-height: 1.7;
+    }
+    .err {
+      margin-top: 10px;
+      color: var(--danger);
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <h1>Placement Drive Task Portal</h1>
+      <p>Secure access to PS1, PS3 and PS4 dashboards</p>
+    </div>
+    <form method="post" action="/login">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required placeholder="demo@stratfuse.ai" />
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required placeholder="Demo@123" />
+
+      <button type="submit">Sign In</button>
+
+      {% if error %}
+      <div class="err">{{ error }}</div>
+      {% endif %}
+
+      <div class="demo">
+        Demo Login 1: demo@stratfuse.ai / Demo@123<br/>
+        Demo Login 2: admin@stratfuse.ai / Admin@123
+      </div>
+    </form>
+  </div>
+</body>
+</html>

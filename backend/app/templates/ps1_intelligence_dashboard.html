@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STRATFUSE — Intelligence Fusion Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #050a0f;
+    --bg2: #0a1520;
+    --bg3: #0d1e2e;
+    --panel: #0e1f30;
+    --border: #1a3a55;
+    --accent: #00d4ff;
+    --accent2: #00ff9d;
+    --accent3: #ff6b35;
+    --accent4: #ff3b6e;
+    --text: #c8dce8;
+    --text-dim: #4a7a9b;
+    --osint: #00d4ff;
+    --humint: #00ff9d;
+    --imint: #ff6b35;
+    --mono: 'Share Tech Mono', monospace;
+    --head: 'Orbitron', sans-serif;
+    --body: 'Rajdhani', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  }
+
+  /* Top bar */
+  #topbar {
+    height: 52px; background: var(--bg2); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 20px; flex-shrink: 0;
+    position: relative; z-index: 100;
+  }
+  #topbar::before {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scanH 4s linear infinite;
+  }
+  @keyframes scanH { 0%{opacity:0.3} 50%{opacity:1} 100%{opacity:0.3} }
+
+  .logo { font-family: var(--head); font-size: 18px; color: var(--accent); letter-spacing: 3px; }
+  .logo span { color: var(--accent2); }
+  .status-cluster { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  .status-pill {
+    font-family: var(--mono); font-size: 10px; padding: 3px 10px;
+    border: 1px solid; border-radius: 2px; animation: pulse 2s infinite;
+  }
+  .pill-live { color: var(--accent2); border-color: var(--accent2); }
+  .pill-osint { color: var(--osint); border-color: var(--osint); }
+  .pill-time { color: var(--text-dim); border-color: var(--border); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  #clock { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+
+  /* Main layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Left panel */
+  #left-panel {
+    width: 260px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .panel-header {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+    letter-spacing: 2px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-header .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); animation: pulse 1.5s infinite; }
+
+  /* Ingest buttons */
+  #ingest-zone { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ingest-btn {
+    padding: 9px 12px; border: 1px solid; border-radius: 3px; cursor: pointer;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 8px; background: transparent;
+    transition: all 0.2s; position: relative; overflow: hidden;
+  }
+  .ingest-btn::before {
+    content: ''; position: absolute; left: -100%; top: 0; bottom: 0; width: 100%;
+    background: currentColor; opacity: 0.05; transition: left 0.3s;
+  }
+  .ingest-btn:hover::before { left: 0; }
+  .ingest-btn:hover { transform: translateX(3px); }
+  .btn-osint { color: var(--osint); border-color: rgba(0,212,255,0.3); }
+  .btn-humint { color: var(--humint); border-color: rgba(0,255,157,0.3); }
+  .btn-imint { color: var(--imint); border-color: rgba(255,107,53,0.3); }
+  .btn-cloud { color: var(--text-dim); border-color: var(--border); }
+  .ingest-btn .icon { font-size: 14px; }
+
+  /* Drop zone */
+  #drop-zone {
+    margin: 0 12px 12px; border: 1px dashed var(--border); border-radius: 4px;
+    padding: 14px; text-align: center; cursor: pointer; transition: all 0.2s;
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  }
+  #drop-zone.dragover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.03); }
+  #drop-zone .drop-icon { font-size: 22px; margin-bottom: 4px; }
+  #file-input { display: none; }
+
+  /* Intelligence feed */
+  #feed { flex: 1; overflow-y: auto; padding: 0; }
+  #feed::-webkit-scrollbar { width: 3px; }
+  #feed::-webkit-scrollbar-track { background: transparent; }
+  #feed::-webkit-scrollbar-thumb { background: var(--border); }
+  .feed-item {
+    padding: 8px 14px; border-bottom: 1px solid rgba(26,58,85,0.4);
+    cursor: pointer; transition: background 0.15s; display: flex; gap: 8px; align-items: flex-start;
+  }
+  .feed-item:hover { background: rgba(0,212,255,0.03); }
+  .feed-item.active { background: rgba(0,212,255,0.06); border-left: 2px solid var(--accent); }
+  .feed-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .feed-dot.osint { background: var(--osint); box-shadow: 0 0 6px var(--osint); }
+  .feed-dot.humint { background: var(--humint); box-shadow: 0 0 6px var(--humint); }
+  .feed-dot.imint { background: var(--imint); box-shadow: 0 0 6px var(--imint); }
+  .feed-meta { flex: 1; min-width: 0; }
+  .feed-title { font-size: 12px; color: var(--text); font-family: var(--body); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .feed-sub { font-size: 10px; color: var(--text-dim); font-family: var(--mono); margin-top: 1px; }
+
+  /* Stats strip */
+  #stats-strip {
+    padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 12px;
+  }
+  .stat { text-align: center; flex: 1; }
+  .stat-num { font-family: var(--head); font-size: 16px; font-weight: 700; }
+  .stat-label { font-family: var(--mono); font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
+  .s-o { color: var(--osint); }
+  .s-h { color: var(--humint); }
+  .s-i { color: var(--imint); }
+
+  /* Map container */
+  #map-container { flex: 1; position: relative; }
+  #map { width: 100%; height: 100%; }
+
+  /* Map overlay UI */
+  #map-legend {
+    position: absolute; top: 14px; left: 14px; z-index: 500;
+    background: rgba(10,21,32,0.85); border: 1px solid var(--border);
+    backdrop-filter: blur(8px); padding: 12px 14px; border-radius: 4px;
+    font-family: var(--mono); font-size: 10px;
+  }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .legend-row:last-child { margin-bottom: 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .l-osint { background: var(--osint); box-shadow: 0 0 8px var(--osint); }
+  .l-humint { background: var(--humint); box-shadow: 0 0 8px var(--humint); }
+  .l-imint { background: var(--imint); box-shadow: 0 0 8px var(--imint); }
+
+  #filter-bar {
+    position: absolute; top: 14px; right: 14px; z-index: 500;
+    display: flex; gap: 6px;
+  }
+  .filter-btn {
+    padding: 5px 12px; border: 1px solid; border-radius: 2px; cursor: pointer;
+    font-family: var(--mono); font-size: 10px; background: rgba(10,21,32,0.85);
+    backdrop-filter: blur(8px); transition: all 0.2s;
+  }
+  .filter-btn.active, .filter-btn:hover { opacity: 1; }
+  .filter-btn:not(.active) { opacity: 0.4; }
+  .fb-o { color: var(--osint); border-color: var(--osint); }
+  .fb-h { color: var(--humint); border-color: var(--humint); }
+  .fb-i { color: var(--imint); border-color: var(--imint); }
+  .fb-all { color: var(--text); border-color: var(--border); }
+
+  /* Right detail panel */
+  #right-panel {
+    width: 280px; flex-shrink: 0; background: var(--bg2); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #detail-content { flex: 1; overflow-y: auto; padding: 14px; }
+  #detail-content::-webkit-scrollbar { width: 3px; }
+  #detail-content::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .detail-empty { color: var(--text-dim); font-family: var(--mono); font-size: 11px; text-align: center; margin-top: 40px; line-height: 2; }
+  .detail-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 2px; font-family: var(--mono);
+    font-size: 10px; border: 1px solid; margin-bottom: 10px; letter-spacing: 1px;
+  }
+  .badge-osint { color: var(--osint); border-color: var(--osint); background: rgba(0,212,255,0.05); }
+  .badge-humint { color: var(--humint); border-color: var(--humint); background: rgba(0,255,157,0.05); }
+  .badge-imint { color: var(--imint); border-color: var(--imint); background: rgba(255,107,53,0.05); }
+  .detail-title { font-family: var(--head); font-size: 14px; color: var(--text); margin-bottom: 12px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(26,58,85,0.3); }
+  .detail-row:last-child { border: none; }
+  .detail-key { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+  .detail-val { font-family: var(--mono); font-size: 10px; color: var(--text); text-align: right; max-width: 60%; word-break: break-all; }
+  .detail-img { width: 100%; border-radius: 3px; margin: 10px 0; border: 1px solid var(--border); object-fit: cover; max-height: 160px; }
+  .detail-desc { font-size: 12px; color: var(--text); line-height: 1.6; margin-top: 10px; }
+
+  /* Popup on map */
+  .intel-popup { font-family: var(--mono); font-size: 11px; color: var(--text); background: var(--bg3); border: 1px solid var(--border); border-radius: 3px; padding: 10px; min-width: 180px; }
+  .intel-popup strong { color: var(--accent); display: block; margin-bottom: 4px; }
+  .intel-popup em { font-style: normal; color: var(--text-dim); font-size: 10px; }
+  .popup-img { width: 100%; max-height: 100px; object-fit: cover; border-radius: 2px; margin-top: 6px; border: 1px solid var(--border); }
+
+  /* Notification toast */
+  #toast {
+    position: fixed; bottom: 20px; right: 20px; z-index: 9000;
+    background: var(--bg3); border: 1px solid var(--accent); border-radius: 3px;
+    padding: 10px 16px; font-family: var(--mono); font-size: 11px; color: var(--accent);
+    transform: translateX(120%); transition: transform 0.3s; max-width: 280px;
+  }
+  #toast.show { transform: translateX(0); }
+
+  /* Leaflet overrides */
+  .leaflet-popup-content-wrapper { background: var(--bg3) !important; border: 1px solid var(--border) !important; border-radius: 3px !important; color: var(--text) !important; box-shadow: 0 0 20px rgba(0,212,255,0.15) !important; }
+  .leaflet-popup-tip { background: var(--bg3) !important; }
+  .leaflet-popup-close-button { color: var(--text-dim) !important; }
+  .leaflet-control-zoom { border: 1px solid var(--border) !important; }
+  .leaflet-control-zoom a { background: var(--bg3) !important; color: var(--accent) !important; border-bottom: 1px solid var(--border) !important; }
+  .leaflet-control-attribution { background: rgba(5,10,15,0.7) !important; color: var(--text-dim) !important; font-size: 9px !important; }
+
+  /* Progress bar */
+  .progress-bar { height: 2px; background: var(--border); border-radius: 1px; margin: 6px 0; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 1px; animation: fillProgress 1.5s ease-out forwards; }
+  @keyframes fillProgress { from{width:0%} }
+  #ingest-log { padding: 8px 14px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 9px; color: var(--text-dim); max-height: 60px; overflow: hidden; }
+  .log-line { animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+</style>
+</head>
+<body>
+
+<div style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:10000;background:rgba(5,10,15,0.92);border:1px solid #1a3a55;border-radius:999px;padding:8px 12px;display:flex;gap:8px;font-family:'Share Tech Mono',monospace;font-size:11px;backdrop-filter:blur(6px)">
+  <a href="/home" style="color:#c8dce8;text-decoration:none;border:1px solid #1a3a55;padding:4px 10px;border-radius:999px;">Home</a>
+  <a href="/ps1" style="color:#00d4ff;text-decoration:none;border:1px solid #00d4ff;padding:4px 10px;border-radius:999px;">PS1</a>
+  <a href="/ps3" style="color:#00ff9d;text-decoration:none;border:1px solid #00ff9d;padding:4px 10px;border-radius:999px;">PS3</a>
+  <a href="/ps4" style="color:#ff6b35;text-decoration:none;border:1px solid #ff6b35;padding:4px 10px;border-radius:999px;">PS4</a>
+  <a href="/logout" style="color:#ff3b6e;text-decoration:none;border:1px solid #ff3b6e;padding:4px 10px;border-radius:999px;">Logout</a>
+</div>
+
+<div id="topbar">
+  <div class="logo">STRAT<span>FUSE</span></div>
+  <div style="width:1px;height:24px;background:var(--border)"></div>
+  <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:2px">MULTI-SOURCE INTELLIGENCE FUSION</span>
+  <div class="status-cluster">
+    <span class="status-pill pill-live">● LIVE</span>
+    <span class="status-pill pill-osint">OSINT ACTIVE</span>
+    <span class="status-pill pill-time">CLASSIFICATION: UNCLASSIFIED // DEMO</span>
+    <span id="clock"></span>
+  </div>
+</div>
+
+<div id="main">
+  <!-- Left Panel -->
+  <div id="left-panel">
+    <div class="panel-header">
+      DATA INGESTION MODULE <div class="dot"></div>
+    </div>
+    <div id="ingest-zone">
+      <button class="ingest-btn btn-osint" onclick="ingestMongoDB()">
+        <span class="icon">⬡</span> CONNECT MONGODB
+      </button>
+      <button class="ingest-btn btn-cloud" onclick="ingestS3()">
+        <span class="icon">☁</span> SYNC AWS S3
+      </button>
+      <button class="ingest-btn btn-humint" onclick="ingestHUMINT()">
+        <span class="icon">◈</span> LOAD HUMINT REPORT
+      </button>
+      <button class="ingest-btn btn-imint" onclick="document.getElementById('file-input').click()">
+        <span class="icon">◉</span> UPLOAD IMINT IMAGE
+      </button>
+    </div>
+    <div id="drop-zone" onclick="document.getElementById('file-input').click()"
+      ondragover="event.preventDefault();this.classList.add('dragover')"
+      ondragleave="this.classList.remove('dragover')"
+      ondrop="handleDrop(event)">
+      <div class="drop-icon">⊕</div>
+      DROP CSV / JSON / JPG<br>OR CLICK TO BROWSE
+    </div>
+    <input type="file" id="file-input" accept=".csv,.json,.jpg,.jpeg,.png" onchange="handleFileSelect(event)">
+    <div class="panel-header" style="border-top:1px solid var(--border)">
+      INTELLIGENCE FEED <div class="dot" style="background:var(--accent3)"></div>
+    </div>
+    <div id="feed"></div>
+    <div id="stats-strip">
+      <div class="stat"><div class="stat-num s-o" id="cnt-osint">0</div><div class="stat-label">OSINT</div></div>
+      <div class="stat"><div class="stat-num s-h" id="cnt-humint">0</div><div class="stat-label">HUMINT</div></div>
+      <div class="stat"><div class="stat-num s-i" id="cnt-imint">0</div><div class="stat-label">IMINT</div></div>
+    </div>
+    <div id="ingest-log"></div>
+  </div>
+
+  <!-- Map -->
+  <div id="map-container">
+    <div id="map"></div>
+    <div id="map-legend">
+      <div class="legend-row"><div class="legend-dot l-osint"></div><span>OSINT — Open Source</span></div>
+      <div class="legend-row"><div class="legend-dot l-humint"></div><span>HUMINT — Human Intel</span></div>
+      <div class="legend-row"><div class="legend-dot l-imint"></div><span>IMINT — Imagery Intel</span></div>
+    </div>
+    <div id="filter-bar">
+      <button class="filter-btn fb-all active" onclick="setFilter('all',this)">ALL</button>
+      <button class="filter-btn fb-o" onclick="setFilter('osint',this)">OSINT</button>
+      <button class="filter-btn fb-h" onclick="setFilter('humint',this)">HUMINT</button>
+      <button class="filter-btn fb-i" onclick="setFilter('imint',this)">IMINT</button>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div id="right-panel">
+    <div class="panel-header">
+      NODE INSPECTOR <div class="dot" style="background:var(--accent3);animation:pulse 1s infinite"></div>
+    </div>
+    <div id="detail-content">
+      <div class="detail-empty">
+        ◈ SELECT A NODE<br>ON THE MAP<br>TO INSPECT
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let nodes = [];
+let markers = [];
+let currentFilter = 'all';
+let map;
+
+// ─── Clock ───────────────────────────────────────────────────────────────────
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toISOString().replace('T',' ').substring(0,19)+' UTC';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Map Init ────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  map = L.map('map', { zoomControl: true, attributionControl: true }).setView([28.6, 77.2], 5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Seed demo data
+  setTimeout(() => { ingestMongoDB(true); }, 600);
+  setTimeout(() => { ingestHUMINT(true); }, 1200);
+  setTimeout(() => { ingestS3(true); }, 1800);
+});
+
+// ─── Node colors ─────────────────────────────────────────────────────────────
+const COLORS = { osint: '#00d4ff', humint: '#00ff9d', imint: '#ff6b35' };
+
+function createMarkerIcon(type) {
+  const c = COLORS[type];
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${c};
+      box-shadow:0 0 12px ${c},0 0 4px ${c};border:2px solid rgba(255,255,255,0.2);
+      cursor:pointer;transition:transform 0.2s;" class="node-marker"></div>`,
+    iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10]
+  });
+}
+
+// ─── Add Node ─────────────────────────────────────────────────────────────────
+function addNode(node) {
+  nodes.push(node);
+  const marker = L.marker([node.lat, node.lng], { icon: createMarkerIcon(node.type) }).addTo(map);
+
+  // Hover popup
+  const popupHtml = `
+    <div class="intel-popup">
+      <strong>${node.title}</strong>
+      <em>${node.type.toUpperCase()} · ${node.timestamp}</em><br>
+      <span style="color:var(--text);font-size:10px">${node.summary}</span>
+      ${node.imageUrl ? `<img src="${node.imageUrl}" class="popup-img" alt="IMINT">` : ''}
+    </div>`;
+  marker.bindPopup(popupHtml, { maxWidth: 240 });
+
+  marker.on('mouseover', function() { this.openPopup(); });
+  marker.on('click', function() { selectNode(node, marker); });
+
+  markers.push({ marker, node });
+  updateFeed();
+  updateCounts();
+  applyFilter(currentFilter);
+}
+
+// ─── Select Node ──────────────────────────────────────────────────────────────
+function selectNode(node, marker) {
+  document.querySelectorAll('.feed-item').forEach(el => el.classList.remove('active'));
+  const feedEl = document.getElementById('feed-item-' + node.id);
+  if(feedEl) { feedEl.classList.add('active'); feedEl.scrollIntoView({block:'nearest'}); }
+
+  const dc = document.getElementById('detail-content');
+  dc.innerHTML = `
+    <div class="detail-badge badge-${node.type}">${node.type.toUpperCase()}</div>
+    <div class="detail-title">${node.title}</div>
+    ${node.imageUrl ? `<img src="${node.imageUrl}" class="detail-img" alt="IMINT Image">` : ''}
+    <div class="detail-row"><span class="detail-key">NODE ID</span><span class="detail-val">${node.id}</span></div>
+    <div class="detail-row"><span class="detail-key">LAT / LNG</span><span class="detail-val">${node.lat.toFixed(4)}, ${node.lng.toFixed(4)}</span></div>
+    <div class="detail-row"><span class="detail-key">TIMESTAMP</span><span class="detail-val">${node.timestamp}</span></div>
+    <div class="detail-row"><span class="detail-key">SOURCE</span><span class="detail-val">${node.source}</span></div>
+    <div class="detail-row"><span class="detail-key">CONFIDENCE</span><span class="detail-val">${node.confidence}%</span></div>
+    <div class="detail-row"><span class="detail-key">PRIORITY</span><span class="detail-val">${node.priority}</span></div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${node.confidence}%;background:${COLORS[node.type]}"></div></div>
+    <p class="detail-desc">${node.description}</p>
+  `;
+  map.panTo([node.lat, node.lng]);
+}
+
+// ─── Feed ─────────────────────────────────────────────────────────────────────
+function updateFeed() {
+  const feed = document.getElementById('feed');
+  feed.innerHTML = '';
+  [...nodes].reverse().forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'feed-item';
+    div.id = 'feed-item-' + n.id;
+    div.innerHTML = `
+      <div class="feed-dot ${n.type}"></div>
+      <div class="feed-meta">
+        <div class="feed-title">${n.title}</div>
+        <div class="feed-sub">${n.timestamp} · ${n.source}</div>
+      </div>`;
+    div.onclick = () => {
+      const m = markers.find(x => x.node.id === n.id);
+      if(m) selectNode(n, m.marker);
+    };
+    feed.appendChild(div);
+  });
+}
+
+function updateCounts() {
+  document.getElementById('cnt-osint').textContent = nodes.filter(n=>n.type==='osint').length;
+  document.getElementById('cnt-humint').textContent = nodes.filter(n=>n.type==='humint').length;
+  document.getElementById('cnt-imint').textContent = nodes.filter(n=>n.type==='imint').length;
+}
+
+// ─── Filter ───────────────────────────────────────────────────────────────────
+function setFilter(type, btn) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilter(type);
+}
+function applyFilter(type) {
+  markers.forEach(({marker, node}) => {
+    if(type === 'all' || node.type === type) {
+      if(!map.hasLayer(marker)) map.addLayer(marker);
+    } else {
+      if(map.hasLayer(marker)) map.removeLayer(marker);
+    }
+  });
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function addLog(msg) {
+  const log = document.getElementById('ingest-log');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = '> ' + msg;
+  log.innerHTML = '';
+  log.appendChild(line);
+}
+
+// ─── Demo Data Generators ─────────────────────────────────────────────────────
+let nodeCounter = 1;
+function uid() { return 'NODE-' + String(nodeCounter++).padStart(4,'0'); }
+
+function ingestMongoDB(silent) {
+  addLog('CONNECTING TO MONGODB...');
+  if(!silent) toast('⬡ MongoDB ingestion initiated');
+  const mongoNodes = [
+    { lat: 28.6139, lng: 77.2090, title: 'Social Media Surge — Delhi', summary: 'Anomalous activity spike detected in capital region', description: 'OSINT crawler detected 340% increase in geofenced social media activity in Delhi NCR. Keywords: mobilization, assembly, rally. Sentiment: NEUTRAL→NEGATIVE. Cross-reference with HUMINT advisable.', source: 'MONGODB/osint_feeds', confidence: 87, priority: 'HIGH' },
+    { lat: 19.0760, lng: 72.8777, title: 'Dark Web Chatter — Mumbai', summary: 'Forum activity flagged by NLP module', description: 'Automated OSINT sweep flagged 23 new threads on encrypted forums discussing logistics in Mumbai port zone. Language pattern matches previous threat signatures at 72% confidence.', source: 'MONGODB/darkweb_crawler', confidence: 62, priority: 'MEDIUM' },
+    { lat: 13.0827, lng: 80.2707, title: 'Media Narrative Shift — Chennai', summary: 'State media sentiment change detected', description: 'Cross-platform media analysis shows 3-sigma deviation in narrative around Chennai port infrastructure. 14 outlets showing coordinated framing patterns. Potential influence operation.', source: 'MONGODB/media_monitor', confidence: 74, priority: 'MEDIUM' },
+  ];
+  mongoNodes.forEach((n, i) => {
+    setTimeout(() => {
+      addNode({ ...n, id: uid(), type: 'osint', timestamp: new Date().toISOString().substring(0,16).replace('T',' '), imageUrl: null });
+      addLog(`OSINT NODE INGESTED: ${n.title}`);
+    }, i * 400);
+  });
+}
+
+function ingestS3() {
+  addLog('SYNCING AWS S3 BUCKET...');
+  toast('☁ S3 sync initiated — pulling IMINT assets');
+  const s3Nodes = [
+    { lat: 32.7266, lng: 74.8570, title: 'Satellite Capture — Jammu Sector', summary: 'High-resolution IMINT from Sector-7', description: 'Satellite imagery captured at 0342 UTC shows unusual vehicle concentration at grid reference 32.72N 74.85E. Estimated 40–60 vehicles. Possible staging area. Recommend UAV confirmation pass.', source: 'S3/imint-bucket/sector7', confidence: 91, priority: 'CRITICAL', imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Gatto_europeo4.jpg/320px-Gatto_europeo4.jpg' },
+    { lat: 34.0837, lng: 74.7973, title: 'IMINT — Kashmir Valley', summary: 'Thermal anomaly — possible camp activity', description: 'Multispectral analysis of imagery from Kashmir valley reveals thermal anomalies consistent with cooking fires and generator exhaust patterns. Estimated 15-20 personnel. Coordinates triangulated.', source: 'S3/imint-bucket/thermal', confidence: 79, priority: 'HIGH', imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Biharwe_landscape.JPG/320px-Biharwe_landscape.JPG' },
+  ];
+  s3Nodes.forEach((n, i) => {
+    setTimeout(() => {
+      addNode({ ...n, id: uid(), type: 'imint', timestamp: new Date().toISOString().substring(0,16).replace('T',' ') });
+      addLog(`IMINT ASSET INGESTED: ${n.title}`);
+    }, i * 500);
+  });
+}
+
+function ingestHUMINT(silent) {
+  if(!silent) toast('◈ HUMINT report parser active');
+  addLog('PARSING HUMINT JSON REPORT...');
+  const humintNodes = [
+    { lat: 26.8467, lng: 80.9462, title: 'Source ALPHA — Lucknow', summary: 'Asset report: meeting observed at safe-house', description: 'Controlled source ALPHA reports observation of three previously identified individuals at confirmed safe-house location in Lucknow. Meeting lasted approx. 2 hours. Two unknown males departed by private vehicle LP: UP-32 series.', source: 'HUMINT/field-report-07', confidence: 83, priority: 'HIGH' },
+    { lat: 23.2599, lng: 77.4126, title: 'Source BRAVO — Bhopal', summary: 'Financial transaction flagged by asset', description: 'Source BRAVO reports observation of large cash transaction at Hamidia Road location. Recipient matches description of person-of-interest from Case File 2047. Amount estimated ₹8-12 lakhs.', source: 'HUMINT/field-report-09', confidence: 68, priority: 'MEDIUM' },
+    { lat: 21.1458, lng: 79.0882, title: 'Source CHARLIE — Nagpur', summary: 'Border movement pattern change noted', description: 'Source CHARLIE (border areas, reliability: B-2) reports change in established movement patterns near Nagpur district border crossing. New vehicles, new faces. Pattern change began approx. 72 hours ago. Recommend surveillance coverage.', source: 'HUMINT/field-report-11', confidence: 55, priority: 'LOW' },
+  ];
+  humintNodes.forEach((n, i) => {
+    setTimeout(() => {
+      addNode({ ...n, id: uid(), type: 'humint', timestamp: new Date().toISOString().substring(0,16).replace('T',' '), imageUrl: null });
+      addLog(`HUMINT NODE INGESTED: ${n.title}`);
+    }, i * 350);
+  });
+}
+
+// ─── File Handling ────────────────────────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file) processFile(file);
+}
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if(file) processFile(file);
+  e.target.value = '';
+}
+
+function processFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  toast(`◉ Processing: ${file.name}`);
+  addLog(`INGESTING FILE: ${file.name}`);
+
+  if(['jpg','jpeg','png'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      addNode({
+        id: uid(), type: 'imint',
+        lat: 20 + Math.random() * 15, lng: 70 + Math.random() * 20,
+        title: `IMINT Upload — ${file.name}`,
+        summary: 'User-uploaded imagery asset',
+        description: `Imagery asset uploaded by analyst. File: ${file.name}. Size: ${(file.size/1024).toFixed(1)}KB. Awaiting geolocation tagging and metadata extraction.`,
+        source: `LOCAL/${file.name}`, confidence: 100, priority: 'PENDING',
+        timestamp: new Date().toISOString().substring(0,16).replace('T',' '),
+        imageUrl: e.target.result
+      });
+    };
+    reader.readAsDataURL(file);
+  } else if(ext === 'json') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        const arr = Array.isArray(data) ? data : [data];
+        arr.slice(0,5).forEach(item => {
+          addNode({
+            id: uid(), type: item.type || 'humint',
+            lat: parseFloat(item.lat || item.latitude || 20 + Math.random()*15),
+            lng: parseFloat(item.lng || item.longitude || 70 + Math.random()*20),
+            title: item.title || item.name || 'JSON Node',
+            summary: item.summary || 'Imported from JSON',
+            description: item.description || JSON.stringify(item).substring(0,200),
+            source: `JSON/${file.name}`, confidence: item.confidence || 70, priority: item.priority || 'MEDIUM',
+            timestamp: new Date().toISOString().substring(0,16).replace('T',' '), imageUrl: null
+          });
+        });
+      } catch(err) { toast('⚠ JSON parse error'); }
+    };
+    reader.readAsText(file);
+  } else if(ext === 'csv') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const lines = e.target.result.split('\n').filter(Boolean);
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      lines.slice(1,6).forEach(line => {
+        const vals = line.split(',');
+        const obj = {};
+        headers.forEach((h,i) => obj[h] = vals[i]?.trim());
+        addNode({
+          id: uid(), type: obj.type || 'osint',
+          lat: parseFloat(obj.lat || obj.latitude) || 20 + Math.random()*15,
+          lng: parseFloat(obj.lng || obj.longitude) || 70 + Math.random()*20,
+          title: obj.title || obj.name || 'CSV Node',
+          summary: 'Imported from CSV',
+          description: `CSV record imported from ${file.name}. Fields: ${headers.join(', ')}.`,
+          source: `CSV/${file.name}`, confidence: parseInt(obj.confidence) || 65, priority: obj.priority || 'MEDIUM',
+          timestamp: new Date().toISOString().substring(0,16).replace('T',' '), imageUrl: null
+        });
+      });
+    };
+    reader.readAsText(file);
+  }
+}
+</script>
+</body>
+</html>
