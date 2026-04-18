@@ -1,6 +1,8 @@
-# Placement Drive Submission - Dashboard Suite
+# Dashboard Bulit with Python
 
 I built this project as part of a placement-drive task where I had to select multiple problem statements and deliver working web apps with separate deployments.
+
+Project name used for submission: **Dashboard Bulit with Python**
 
 ## What is in this repository
 
