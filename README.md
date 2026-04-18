@@ -23,6 +23,7 @@ I also kept a `backend` folder from an earlier login-enabled integration attempt
 - PS1: https://pgk-ps1-intelligence.vercel.app
 - PS3: https://pgk-ps3-urban-growth.vercel.app
 - PS4: https://pgk-ps4-traffic-intel.vercel.app
+- Project Report (PDF): https://github.com/ganeshkrishnareddy/Dashboards_Built_With_Python/blob/master/docs/Report.pdf
 
 ## How I built this
 
